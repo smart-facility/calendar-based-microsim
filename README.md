@@ -14,9 +14,9 @@ To execute the code, run:
 java -jar syntheticPopulation.jar $seed $n_year "input tables/" "Initialize_population.csv" "yearlyImmiHholds.csv" $order $out $birthday $deathday
 
 With :
-$seed : the seed for the pseudo-random number generator
+  - $seed : the seed for the pseudo-random number generator
 
-$n_year : the number of year to model
+  - $n_year : the number of year to model
 
 "input tables/" : the location of the input tables
 
