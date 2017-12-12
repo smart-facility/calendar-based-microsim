@@ -15,11 +15,19 @@ java -jar syntheticPopulation.jar $seed $n_year "input tables/" "Initialize_popu
 
 With :
 $seed : the seed for the pseudo-random number generator
+
 $n_year : the number of year to model
+
 "input tables/" : the location of the input tables
+
 "Initialize_population.csv" : population at the beginning of the simulation
+
 "yearlyImmiHholds.csv" : number of immigrating households per year
+
 $order : order of the simulation (0: ageing, 1: death, 2: divorce, 3: marriage, 4: birth)
+
 $out : willing location for the output files
+
 $birthday : boolean indicating if birthday is considered
+
 $deathday : boolean indicating if deathday is considered
