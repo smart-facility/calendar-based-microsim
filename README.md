@@ -2,8 +2,10 @@
 A calendar-based approach to order the various models in a microsimulation for the evolution of a population.
 
 # authors
-Dumont M., University of Namur: conversion of the initial code of TransMob to add the possibility to code with the dates\n
-Barthélemy J., SMART, University of Wollongong: write initial code\n
+Dumont M., University of Namur: conversion of the initial code of TransMob to add the possibility to code with the dates
+
+Barthélemy J., SMART, University of Wollongong: write initial code
+
 Huynh N., SMART, University of Wollongong: write initial code and the possibility to chose the order of modules
 
 # execution
