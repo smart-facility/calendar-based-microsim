@@ -31,3 +31,8 @@ With :
   - $birthday : boolean indicating if birthday is considered
 
   - $deathday : boolean indicating if deathday is considered
+
+# related paper
+Paper submitted to JASS on 12th of December 2017:
+Towards the Right Ordering of the Sequence of Models for the Evolution of a Population Using Agent-Based Simulation
+by Morgane Dumont, Johan Barthelemy, Nam Huynh and Timoteo Carletti
