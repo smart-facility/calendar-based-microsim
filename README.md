@@ -9,9 +9,9 @@ Barthélemy J., SMART, University of Wollongong: write initial code
 Huynh N., SMART, University of Wollongong: write initial code and the possibility to chose the order of modules
 
 # execution
-To execute the code, run: 
+After compiling the code inside "SP.jar", to execute the code, run: 
 
-java -jar syntheticPopulation.jar $seed $n_year "input tables/" "Initialize_population.csv" "yearlyImmiHholds.csv" $order $out $birthday $deathday
+java -jar SP.jar $seed $n_year "input tables/" "Initialize_population.csv" "yearlyImmiHholds.csv" $order $out $birthday $deathday
 
 With :
   - $seed : the seed for the pseudo-random number generator
