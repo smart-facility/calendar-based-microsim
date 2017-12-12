@@ -1,0 +1,459 @@
+package core;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Collections;
+
+import org.apache.commons.io.FileUtils;
+
+import core.SyntheticPopulation.*;
+import core.SyntheticPopulation.AttributeAssignment.AttributeAssigner;
+
+public class ModelMain {
+	
+	/**
+	 * 
+	 * example of executing from command prompt
+	 * java -jar spEvoByOrder.jar 0 5 "input tables/" "dac2011_sp_28suburbs.csv" "yearlyImmiHholds.csv" "evoOrder.csv" "output/testEvoOrder_2_"
+	 * or
+	 * java -jar spEvoByOrder.jar 0 5 "input tables/" "pop_synth.db" "yearlyImmiHholds.csv" "evoOrder.csv" "output/testEvoOrder_2_"
+	 * 
+	 * @param args
+	 */
+	public static void mainEvoOrder(String[] args) {
+		
+		String seedValueString = args[0];//"0"; //
+		String nYearsString = args[1];//"5"; //
+		String inputTablesPath = args[2];//"input tables/"; //
+		String initSP = args[3];//"pop_synth.db"; //
+		//String initSPFilename = args[3];//"dac2011_sp_28suburbs.csv"; //
+		String yearlyImmiFilename = args[4];//"yearlyImmiHholds.csv"; //
+		String evoOrderFilename = args[5];//"evoOrder.csv"; //
+		String outputFolder = args[6];//"output/testEvoOrder_2_"; //
+		
+		/*
+		String seedValueString = "0"; //
+		String nYearsString = "5"; //
+		String inputTablesPath = "input tables/"; //
+		//String initSP = "pop_synth.db"; //
+		String initSP = "dac2011_sp_28suburbs.csv"; //
+		String yearlyImmiFilename = "yearlyImmiHholds.csv"; //
+		String evoOrderFilename = "evoOrder.csv"; //
+		String outputFolder = "output/testEvoOrder_1_";  //
+		*/
+		
+		String outputTablesPath = outputFolder + seedValueString + "/";
+		
+		HardcodedData.inputTablesPath = inputTablesPath;
+		HardcodedData.initOutPutPath(outputTablesPath);
+		String fNameImmiHholds = HardcodedData.inputTablesPath + yearlyImmiFilename;
+		
+		int nYears;
+		try {
+			nYears = Integer.parseInt(nYearsString);
+		} catch (NumberFormatException e) {
+			System.out.println(nYearsString + " is invalid for the number of years for population evolution. Abort evolution!");
+			return;
+		}
+		
+		int seedValue;
+		try {
+			seedValue = Integer.parseInt(seedValueString);
+			HardcodedData.setSeed(seedValue);
+		} catch (NumberFormatException e) {
+			System.out.println(seedValueString + " is invalid for seed value for pseudo-random number generator. Abort evolution!");
+			return;
+		}
+		
+		String initSPFileType = initSP.split("[.]")[1];
+		if (initSPFileType.equals("csv")) {
+			String initSPLocation = HardcodedData.inputTablesPath + initSP;
+			PopulationIOHandler.initialisePopulationFromCSV(initSPLocation);
+		} else if (initSPFileType.equals("db")) {
+			String initSPLocation = "jdbc:sqlite:" + HardcodedData.inputTablesPath + initSP;
+			PopulationIOHandler.initialisePopulationFromDB(initSPLocation);
+		}
+		if (Population.getHhPool()==null || Population.getIndivPool()==null) {
+			System.out.println("Failed to retrieve initial population. Aborting evolution!");
+			return;
+		}
+		System.out.println("Finish initialisePopulationFromCSV");
+		
+		// reads in evolution rates
+		Rates.importRates(HardcodedData.inputTablesPath + "rates/birth_rates.csv", 
+				HardcodedData.inputTablesPath + "rates/death_rates_female.csv",
+				HardcodedData.inputTablesPath + "rates/death_rates_male.csv", 
+				HardcodedData.inputTablesPath + "rates/divorce_rates_female.csv", 
+				HardcodedData.inputTablesPath + "rates/divorce_rates_male.csv", 
+				HardcodedData.inputTablesPath + "rates/marriage_rates_female.csv", 
+				HardcodedData.inputTablesPath + "rates/marriage_rates_male.csv");
+		
+		Rates.importImmiHHoldsByYear(fNameImmiHholds);
+		
+		if (Rates.getBirthRates()==null ||
+				Rates.getDeathRatesFemale()==null || Rates.getDeathRatesMale()==null ||
+				Rates.getDivorceRatesFemale()==null || Rates.getDivorceRatesMale()==null ||
+				Rates.getMarriageRatesFemale()==null || Rates.getMarriageRatesMale()==null) {
+			System.out.println("At least one of the evolution rates are null. Abort evolution!");
+			return;
+		}
+		
+		int[] evoOrder = Rates.readInEvolutionOrder(HardcodedData.inputTablesPath + evoOrderFilename);
+		if (evoOrder==null) {
+			System.out.println("Invalid integer values for evoultion order in " + HardcodedData.inputTablesPath + evoOrderFilename + ". Abort evolution!");
+		}
+		if (ArrayHandler.max(evoOrder)>4) {
+			System.out.println("Max evolution step is larger than 4. Abort evolution!");
+		}
+		System.out.println("importing data finished.\n");
+		
+		Population.startEvoWithFunctorAndSimpleHholdMigration(nYears, HardcodedData.outputTablesPath + "totalPopByYear.csv", evoOrder);
+	}
+	
+	/**
+	 * 
+	 * example of executing from command prompt
+	 * java -jar spEvolution.jar "input tables/" "dac2011_sp_28suburbs.csv" "yearlyImmiHholds.csv" "evoOrder.csv" "output/SPEvolution/" 5 0
+	 * or
+	 * java -jar spEvolution.jar "input tables/" "pop_synth.db" "yearlyImmiHholds.csv" "evoOrder.csv" "output/SPEvolution/" 5 0
+	 * 
+	 * @param args
+	 */
+	public static void mainDAC (String[] args) {
+		/*
+		String inputTablesPath = args[0];//"input tables/"; //
+		String initSP = args[1];//"pop_synth.db"; //
+		//String initSPFilename = args[1];//"dac2011_sp_28suburbs.csv"; //
+		String yearlyImmiFilename = args[2];//"yearlyImmiHholds.csv"; //
+		String evoOrderFilename = args[3];//"evoOrder.csv"; //
+		String outputTablesPath = args[4];//"output/SPEvolution/"; //
+		String nYearsString = args[5];//"5"; //
+		String seedValueString = args[6];//"0"; //
+		String dwellingProjectFileName = args[7];//"dac2011_dwellingForecasts.csv"; //
+		*/
+		
+		String inputTablesPath = "input tables/"; //
+		//String initSP = "pop_synth.db"; //
+		String initSP = "dac2011_sp_28suburbs.csv"; //
+		// we probably won't need the yearlyImmiHholds.csv because households will be migrated using emigrantAgeDistribFileName and immigrantAgeDistribFileName
+		//String yearlyImmiFilename = "yearlyImmiHholds.csv"; //
+		String evoOrderFilename = "evoOrder.csv"; //
+		String seedValueString = "0"; //
+		String outputTablesPath = "output/testDAC_B_run3_" + seedValueString + "/"; //
+		String nYearsString = "20"; //
+		String dwellingProjectionFileName = "dac_dwellingForecasts_B.csv"; //
+		String emigrantAgeDistribFileName = "emigrantAgeDistrib.csv";
+		String immigrantAgeDistribFileName = "immigrantAgeDistrib.csv";
+		double pcEmigrantsInPopulation = 0.025;
+		double pcImmigrantsInPopulation = 0.022;
+		
+		HardcodedData.inputTablesPath = inputTablesPath;
+		HardcodedData.initOutPutPath(outputTablesPath);
+		//String fNameImmiHholds = HardcodedData.inputTablesPath + yearlyImmiFilename;
+		
+		int nYears;
+		try {
+			nYears = Integer.parseInt(nYearsString);
+		} catch (NumberFormatException e) {
+			System.out.println(nYearsString + " is invalid for the number of years for population evolution. Abort evolution!");
+			return;
+		}
+		
+		int seedValue;
+		try {
+			seedValue = Integer.parseInt(seedValueString);
+			HardcodedData.setSeed(seedValue);
+		} catch (NumberFormatException e) {
+			System.out.println(seedValueString + " is invalid for seed value for pseudo-random number generator. Abort evolution!");
+			return;
+		}
+		
+		String initSPFileType = initSP.split("[.]")[1];
+		if (initSPFileType.equals("csv")) {
+			String initSPLocation = HardcodedData.inputTablesPath + initSP;
+			PopulationIOHandler.initialisePopulationFromCSV(initSPLocation);
+		} else if (initSPFileType.equals("db")) {
+			String initSPLocation = "jdbc:sqlite:" + HardcodedData.inputTablesPath + initSP;
+			PopulationIOHandler.initialisePopulationFromDB(initSPLocation);
+		}
+		if (Population.getHhPool()==null || Population.getIndivPool()==null) {
+			System.out.println("Failed to retrieve initial population. Aborting evolution!");
+			return;
+		}
+		System.out.println("Finish initialisePopulationFromCSV");
+		
+		// reads in evolution rates
+		Rates.importRates(HardcodedData.inputTablesPath + "rates/birth_rates.csv", 
+				HardcodedData.inputTablesPath + "rates/death_rates_female.csv",
+				HardcodedData.inputTablesPath + "rates/death_rates_male.csv", 
+				HardcodedData.inputTablesPath + "rates/divorce_rates_female.csv", 
+				HardcodedData.inputTablesPath + "rates/divorce_rates_male.csv", 
+				HardcodedData.inputTablesPath + "rates/marriage_rates_female.csv", 
+				HardcodedData.inputTablesPath + "rates/marriage_rates_male.csv");
+		
+		//Rates.importImmiHHoldsByYear(fNameImmiHholds);
+		
+		Rates.importEmigrantAgeDistrib(inputTablesPath + emigrantAgeDistribFileName);
+		Rates.importImmigrantAgeDistrib(inputTablesPath + immigrantAgeDistribFileName);
+		Population.setPcEmigrantsInPopulation(pcEmigrantsInPopulation);
+		Population.setPcImmigrantsInPopulation(pcImmigrantsInPopulation);
+		
+		if (Rates.getBirthRates()==null ||
+				Rates.getDeathRatesFemale()==null || Rates.getDeathRatesMale()==null ||
+				Rates.getDivorceRatesFemale()==null || Rates.getDivorceRatesMale()==null ||
+				Rates.getMarriageRatesFemale()==null || Rates.getMarriageRatesMale()==null) {
+			System.out.println("At least one of the evolution rates are null. Abort evolution!");
+			return;
+		}
+		
+		int[] evoOrder = Rates.readInEvolutionOrder(HardcodedData.inputTablesPath + evoOrderFilename);
+		if (evoOrder==null) {
+			System.out.println("Invalid integer values for evoultion order in " + HardcodedData.inputTablesPath + evoOrderFilename + ". Abort evolution!");
+		}
+		if (ArrayHandler.max(evoOrder)>4) {
+			System.out.println("Max evolution step is larger than 4. Abort evolution!");
+		}
+		
+		//initialises dwelling projections that were provided by City Futures @ UNSW as part of the DAC project (2016)
+		Rates.initDwellingForecasts(HardcodedData.inputTablesPath + dwellingProjectionFileName);
+		
+		System.out.println("\nimporting data finished.");
+		
+		HardcodedData.initialiseZoneNames();
+		
+		//Population.startEvolutionWithSimpleHholdMigration(nYears, HardcodedData.outputTablesPath + "totalPopByYear.csv", evoOrder);
+		
+		Population.startEvoInclEmigrationAndImmigration(2011, nYears, evoOrder);
+	}
+	
+	
+	/**
+	 * example of executing from command prompt
+	 * java -jar spEvolution.jar "input tables/" "new2011initPop.csv" "jobChangeByYear_base.csv" "post processing/output SP evolution/" 10 92359 26136 6060 0.4 "yearlyImmiHholds.csv" 0.7
+	 * 
+	 * @param args
+	 */
+	public static void main(String[] args) {
+		HardcodedData.setSeed(0);
+
+		// the below bit of codes are to be used in compiled version, ie from command line
+		/*
+		HardcodedData.inputTablesPath = args[0]; //"input tables/"; 
+		String fileInitSP = HardcodedData.inputTablesPath + args[1]; //HardcodedData.inputTablesPath + "new2011initPop.csv";
+		String fNameJobChangeByYear = HardcodedData.inputTablesPath + args[2]; //HardcodedData.inputTablesPath + "jobChangeByYear_base.csv";
+		HardcodedData.outputTablesPath = args[3]; //"post processing/output SP evolution/";
+		String nYearsString = args[4]; //"10";
+		String liveInWorkIn = args[5]; //"92359"; // from JTW2011
+		String liveInWorkOut = args[6]; //"26136"; // from JTW2011
+		String liveOutWorkIn = args[7]; //"6060"; // from JTW2011
+		
+		String immiFamiRatioStr = args[8]; //"0.4";
+		// Notes the above number of families immigrating into the area based on the job number available
+		// for example if there are 50 jobs available and the ratio is 0.4, the number of immigrant families is 50*0.4 = 20 families.
+		// this ratio must be positive and be smaller than or equal to 1 to ensure that any immigrant family takes up at least a job.
+		
+		String fNameImmiHholds = HardcodedData.inputTablesPath + args[9]; //HardcodedData.inputTablesPath + "yearlyImmiHholds.csv";
+		
+		String outEmployedImmgrantRatioStr = args[10]; // "0.7";
+		*/
+		
+		// the below bit of codes are to be used from within Eclipse
+		HardcodedData.inputTablesPath = "input tables/"; 
+		String fileInitSP = HardcodedData.inputTablesPath + "vi_2011initPop3LGAs_Oct2016_fromCensus.csv";
+		String fNameJobChangeByYear = HardcodedData.inputTablesPath + "jobChangeByYear.csv";
+		String fNamePercentLIWOByYear = HardcodedData.inputTablesPath + "percentLIWOByYear.csv";
+		HardcodedData.outputTablesPath = "post processing/test2_newCalc4LIWO/";
+		String nYearsString = "6";
+		String liveInWorkIn = "92359"; // from JTW2011
+		String liveInWorkOut = "26136"; // from JTW2011
+		String liveOutWorkIn = "6060"; // from JTW2011
+		String immiFamiRatioStr = "1";
+		//String fNameImmiHholds = HardcodedData.inputTablesPath + "yearlyImmiHholds.csv";
+		String outEmployedImmgrantRatioStr = "0";//"0.75";
+		String newJobsToLocalUnEmplRatioStr = "1.0";
+		String pcNonLabourImmigrantsStr = "0.3";
+		// the below age distribution of emigrants and immigrants for 3LGAs in Illawarra are from below website
+		// http://migrationmappingdev.s3-website-ap-southeast-2.amazonaws.com/#modal=null&geometry=lga&direction=in&selected=Randwick&output=interstate
+		String emigrantAgeDistribFileName = "vi2011_emigrantAgeDistrib.csv";
+		String immigrantAgeDistribFileName = "vi2011_immigrantAgeDistrib.csv";
+		double pcEmigrantsInPopulation = 0.011029;
+		double pcImmigrantsInPopulation = 0.023;//0.022;//0.016152;
+		
+		int nYears;
+		double immiFamiRatio, outEmployedImmgrantRatio, newJobsToLocalUnEmplRatio, pcNonLabourImmigrants;
+		
+		try {
+			pcNonLabourImmigrants = Double.parseDouble(pcNonLabourImmigrantsStr);
+			Population.setPcNonLabourImmigrants(pcNonLabourImmigrants);
+		} catch (NumberFormatException e) {
+			System.out.println(pcNonLabourImmigrantsStr + " is invalid for the proportion of non labour people among the non-employed immigrants. Abort evolution!");
+			return;
+		}
+		
+		try {
+			newJobsToLocalUnEmplRatio = Double.parseDouble(newJobsToLocalUnEmplRatioStr);
+			Population.setNewJobsToLocalUnEmplRatio(newJobsToLocalUnEmplRatio);
+		} catch (NumberFormatException e) {
+			System.out.println(newJobsToLocalUnEmplRatioStr + " is invalid for the proportion of new jobs going to local unemployed people. Abort evolution!");
+			return;
+		}
+		
+		try {
+			outEmployedImmgrantRatio = Double.parseDouble(outEmployedImmgrantRatioStr);
+			Population.setOutEmployedImmgrantRatio(outEmployedImmgrantRatio);
+		} catch (NumberFormatException e) {
+			System.out.println(immiFamiRatioStr + " is invalid for the ratio of immigrants being employed outside. Abort evolution!");
+			return;
+		}
+		
+		try {
+			immiFamiRatio = Double.parseDouble(immiFamiRatioStr);
+			if (immiFamiRatio>1) {
+				System.out.println("The ratio of jobs available and number of immigrant households, " + immiFamiRatioStr + ", should not be larger than 1. Abort evolution!");
+			} else {
+				Population.setJobImmiFamiRatio(immiFamiRatio);
+			}
+			
+		} catch (NumberFormatException e) {
+			System.out.println(immiFamiRatioStr + " is invalid for the ratio of jobs available and number of immigrant households. Abort evolution!");
+			return;
+		}
+		
+		try {
+			nYears = Integer.parseInt(nYearsString);
+		} catch (NumberFormatException e) {
+			System.out.println(nYearsString + " is invalid for the number of years for population evolution. Abort evolution!");
+			return;
+		}
+		
+		try {
+			Population.setInitLiveInWorkIn(Integer.parseInt(liveInWorkIn));
+		} catch (NumberFormatException e) {
+			System.out.println(nYearsString + " is invalid for the number of local residents working locally. Abort evolution!");
+			return;
+		}
+		
+		try {
+			Population.setInitLiveInWorkOut(Integer.parseInt(liveInWorkOut));
+		} catch (NumberFormatException e) {
+			System.out.println(nYearsString + " is invalid for the number of local residents working outside. Abort evolution!");
+			return;
+		}
+		
+		try {
+			Population.setInitLiveOutWorkIn(Integer.parseInt(liveOutWorkIn));
+			Population.setCrnLiveOutWorkIn(Integer.parseInt(liveOutWorkIn));
+		} catch (NumberFormatException e) {
+			System.out.println(nYearsString + " is invalid for the number of outside people working locally. Abort evolution!");
+			return;
+		}
+		
+		PopulationIOHandler.initialisePopulationFromCSV(fileInitSP);
+		if (Population.getHhPool()==null || Population.getIndivPool()==null) {
+			System.out.println("Failed to retrieve initial population. Aborting evolution!");
+			return;
+		}
+		System.out.println("Finish initialisePopulationFromCSV");
+		
+		// reads in evolution rates
+		Rates.importRates(HardcodedData.inputTablesPath + "rates/birth_rates.csv", 
+				HardcodedData.inputTablesPath + "rates/death_rates_female.csv",
+				HardcodedData.inputTablesPath + "rates/death_rates_male.csv", 
+				HardcodedData.inputTablesPath + "rates/divorce_rates_female.csv", 
+				HardcodedData.inputTablesPath + "rates/divorce_rates_male.csv", 
+				HardcodedData.inputTablesPath + "rates/marriage_rates_female.csv", 
+				HardcodedData.inputTablesPath + "rates/marriage_rates_male.csv");
+		
+		Rates.importJobChangeByYear(fNameJobChangeByYear);
+		
+		Rates.importPercentLIWOByYear(fNamePercentLIWOByYear);
+		
+		//Rates.importImmiHHoldsByYear(fNameImmiHholds);
+		
+		Rates.importEmigrantAgeDistrib(HardcodedData.inputTablesPath + emigrantAgeDistribFileName);
+		Rates.importImmigrantAgeDistrib(HardcodedData.inputTablesPath + immigrantAgeDistribFileName);
+		Population.setPcEmigrantsInPopulation(pcEmigrantsInPopulation);
+		Population.setPcImmigrantsInPopulation(pcImmigrantsInPopulation);
+		
+//		HashMap<Integer,Double> immiHholds = Rates.getImmiHholdsByYear();
+//		System.out.println("immiHholds");
+//		for (Integer year : immiHholds.keySet()) {
+//			System.out.println(year + ", " + immiHholds.get(year));
+//		}
+		
+		if (Rates.getBirthRates()==null ||
+				Rates.getDeathRatesFemale()==null || Rates.getDeathRatesMale()==null ||
+				Rates.getDivorceRatesFemale()==null || Rates.getDivorceRatesMale()==null ||
+				Rates.getMarriageRatesFemale()==null || Rates.getMarriageRatesMale()==null ||
+				Rates.getJobChangeByYear()==null) {
+			System.out.println("At least one of the evolution rates are null. Abort evolution!");
+			return;
+		}
+		System.out.println("\nimporting data finished.");
+		
+		AttributeAssigner.assignEmploymentStatus(HardcodedData.inputTablesPath + "attributes/2011employmentStatusByAge.csv");
+		
+		AttributeAssigner.assignWorkPlace();
+		
+		/*
+		 * please note the function redistributekids10_14() is completely artificial and used only for VI project as at Dec 2016.
+		 * This function should not be used for any other applications or projects.
+		 */
+		redistributekids10_14();
+		
+		Population.startEvolutionWithEmployment(nYears, HardcodedData.outputTablesPath + "totalPopByYear.csv");
+	}
+	
+	/**
+	 * redistribute the number of kids of age 10, 11, 12, 13, 14 in the initial population.
+	 * This step is required because there is a significantly imbalance (and unrealistic) distribution of kids in these ages in the initial population for 2011 for VI project
+	 * Particularly, the number of kids in these ages in this population are
+	 * 10yo, 5235
+	 * 11yo, 5201
+	 * 12yo, 5252
+	 * 13yo, 5178
+	 * 14yo, 161
+	 * This function evenly redistributes the total number of kids between 10 and 14 (inclusively) to each of the ages. 
+	 */
+	private static void redistributekids10_14() {
+		// randomly picks 4000 indivs of 13 yo and assign them as 14 yo.
+		turnPeople1YearOlder(13, 4000);
+		turnPeople1YearOlder(12, 3000);
+		turnPeople1YearOlder(11, 2000);
+		turnPeople1YearOlder(10, 1000);
+	}
+	
+	/**
+	 * 
+	 * @param crnAge
+	 * @param nppToTurn
+	 */
+	private static void turnPeople1YearOlder(int crnAge, int nppToTurn) {
+		int nppTurned = 0;
+		ArrayList<Integer> idIndivsThisAge = getIndivIDsByAge(crnAge);
+		Collections.shuffle(idIndivsThisAge,HardcodedData.random);
+		for (Integer indivID : idIndivsThisAge) {
+			if (nppTurned >= nppToTurn) {
+				break;
+			}
+			Population.getIndivPool().get(indivID).setAge(Population.getIndivPool().get(indivID).getAge()+1);
+			nppTurned += 1;
+		}
+	}
+	
+	/**
+	 * 
+	 * @param age
+	 */
+	private static ArrayList<Integer> getIndivIDsByAge(int age) {
+		ArrayList<Integer> indivsID = new ArrayList<Integer>();
+		for (Individual indiv : Population.getIndivPool().values()) {
+			if (indiv.getAge()==age) {
+				indivsID.add(indiv.getId());
+			}
+		}
+		return indivsID;
+	}
+}
